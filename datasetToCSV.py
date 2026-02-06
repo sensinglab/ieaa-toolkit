@@ -1,28 +1,30 @@
 import os
 import pandas as pd
-from scapy.all import rdpcap, Dot11ProbeReq, Dot11Elt, Dot11EltVendorSpecific
-
-def get_rates_str(info_bytes):
-    rates = []
-    for b in info_bytes:
-        val = b & 0x7f
-        rate = val * 0.5
-        basic = '(B)' if b & 0x80 else ''
-        rates.append(f"{rate:.1f}{basic}")
-    return ','.join(rates)
+from scapy.all import rdpcap, Dot11ProbeReq, Dot11Elt
 
 data_dir = './Data'
 output_csv = 'dataset_tabular.csv'
 
-allowed_ids = [1, 3, 45, 50, 59, 70, 107, 127, 191, 221]
+allowed_ids = {
+    1: 'IE_SupportedRates',
+    3: 'IE_DSSSParameterSet',
+    45: 'IE_HTCapabilities',
+    50: 'IE_ExtendedSupportedRates',
+    59: 'IE_SupportedOperatingClasses',
+    70: 'IE_RMEnabledCapabilities',
+    107: 'IE_Interworking',
+    127: 'IE_ExtendedCapabilities',
+    191: 'IE_VHTCapabilities',
+    221: 'IE_VendorSpecific'
+}
 
 rows = []
-
 pcap_files = [f for f in os.listdir(data_dir)]
 
 for file in pcap_files:
-    device_id = file[:-5]  # Remove '.pcap'
+    device_id = file.split('-')[0]
     full_path = os.path.join(data_dir, file)
+    
     try:
         packets = rdpcap(full_path)
     except Exception as e:
@@ -30,56 +32,52 @@ for file in pcap_files:
         continue
 
     for pkt in packets:
-        if pkt.haslayer(Dot11ProbeReq):
-            row = {
-                'Device_ID': device_id,
-                'MAC': pkt.addr2,
-                'Timestamp': pkt.time,
-                'Sequence_Number': pkt.SC >> 4
-            }
+        if not pkt.haslayer(Dot11ProbeReq):
+            continue
 
-            vendor_infos = []
-            elt = pkt[Dot11ProbeReq].payload
-            while elt and isinstance(elt, Dot11Elt):
-                if elt.ID in allowed_ids:
-                    cls_name = elt.__class__.__name__.replace('Dot11Elt', '')
-                    prefix = f'IE_{cls_name}_'
+        row = {
+            'Device_ID': device_id,
+            'MAC': pkt.addr2,
+            'Timestamp': float(pkt.time),
+            'Sequence_Number': int(pkt.SC >> 4)
+        }
 
-                    if elt.ID == 1:
-                        row['IE_SupportedRates_rates'] = get_rates_str(elt.info)
-                    elif elt.ID == 50:
-                        row['IE_ExtendedSupportedRates_rates'] = get_rates_str(elt.info)
-                    elif elt.ID == 221:  # Vendor Specific
-                        oui_str = ':'.join(f'{b:02x}' for b in elt.oui.to_bytes(3, 'big'))
-                        info_hex = elt.info.hex()
-                        vendor_infos.append(f'{oui_str}:{info_hex}')
+        elt = pkt[Dot11ProbeReq].payload
+        while isinstance(elt, Dot11Elt):
+            
+            # Handle Standard Allowed IDs
+            if elt.ID in allowed_ids and elt.ID != 221:
+                col_name = allowed_ids[elt.ID]
+                # Unified Format: Hex string of the payload
+                row[col_name] = elt.info.hex()
+
+            # Handle Vendor Specific (ID 221)
+            elif elt.ID == 221:
+                if len(elt.info) >= 3:
+                    oui_str = ':'.join(f'{b:02x}' for b in elt.oui.to_bytes(3, 'big'))
+                    data_hex = elt.info.hex()
+                    col_name = f'IE_VendorSpecific_{oui_str}'
+
+                    if col_name in row:
+                        row[col_name] = row[col_name] + "+" + data_hex
                     else:
-                        for k, v in elt.fields.items():
-                            if k in ['ID', 'len']:
-                                continue
-                            if k == 'info' and isinstance(v, bytes):
-                                row[prefix + k] = v.hex()
-                            elif k == 'classes' and isinstance(v, list):
-                                row[prefix + k] = ','.join(map(str, v))
-                            else:
-                                row[prefix + k] = v
+                        row[col_name] = data_hex
 
-                elt = elt.payload
+            elt = elt.payload
 
-            if vendor_infos:
-                row['IE_VendorSpecific_infos'] = ';'.join(vendor_infos)
-
-            rows.append(row)
+        rows.append(row)
 
 df = pd.DataFrame(rows)
 
-# For ML purposes: Fill NaN in numeric columns with 0, strings with ''
-numeric_cols = df.select_dtypes(include=['number']).columns
-df[numeric_cols] = df[numeric_cols].fillna(0)
-
+# Fill Missing Categorical Values
 object_cols = df.select_dtypes(include=['object']).columns
-df[object_cols] = df[object_cols].fillna('')
+df[object_cols] = df[object_cols].fillna('MISSING')
+
+# Fill missing numeric cols (excluding Timestamp/Seq) with -1 if any exist
+numeric_cols = df.select_dtypes(include=['number']).columns
+cols_to_fill = [c for c in numeric_cols if c not in ['Timestamp', 'Sequence_Number']]
+if cols_to_fill:
+    df[cols_to_fill] = df[cols_to_fill].fillna(-1)
 
 df.to_csv(output_csv, index=False)
-
 print(f"CSV saved to {output_csv}")
