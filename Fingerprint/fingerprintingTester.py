@@ -1,6 +1,7 @@
 from scapy.all import *
 import sqlite3
 import time
+import sys
 sys.path.append('/home/kali/Desktop')
 from t1ha0 import ffi, lib
 
@@ -35,17 +36,17 @@ def frame_processing(frame):
         elif(ie.ID == 45):              # HT Capabilities
             array_v.append(ie.ID)
             array_v.append(ie.len)
-            for i, c in enumerate(ie.info):
-                if(i != 4):
-                    array_v.append(c)
-                else:
-                    array_v.append(ord('0'))
+            for c in ie.info:
+                array_v.append(c)
         
         elif(ie.ID == 127):             # Extended Capabilities
             array_v.append(ie.ID)
             #array_v.append(ie.len)
-            for c in ie.info:
-                array_v.append(c)
+            for i, c in enumerate(ie.info):
+                if(i != 0):
+                    array_v.append(c)
+                else:
+                    array_v.append(ord('0'))
         
         elif(ie.ID == 191):             # VHT Capabilities
             array_v.append(ie.ID)
@@ -56,8 +57,11 @@ def frame_processing(frame):
         elif(ie.ID == 70):              # RM Enabled Capabilities 
             array_v.append(ie.ID)
             array_v.append(ie.len)
-            for c in ie.info:
-                array_v.append(c)
+            for i, c in enumerate(ie.info):
+                if(i not in range(6)):
+                    array_v.append(c)
+                else:
+                    array_v.append(ord('0'))
         
         elif(ie.ID == 107):             # Interworking
             array_v.append(ie.ID)
@@ -75,76 +79,10 @@ def frame_processing(frame):
             array_v.append(ie.ID)
             array_v.append(ie.len)
             for i, c in enumerate(ie.info):
-                if(i != 5 and i != 7):
+                if(i != 5):
                     array_v.append(c)
                 else:
                     array_v.append(ord('0'))
-        # if(ie.ID == 1):                 # Supported Rates
-        #     array_v.append(ie.ID)
-        #     array_v.append(ie.len)
-        #     for c in ie.info:
-        #         array_v.append(c)
-        
-        # elif(ie.ID == 50):              # Extended Supported Rates
-        #     array_v.append(ie.ID)
-        #     array_v.append(ie.len)
-        #     for c in ie.info:
-        #         array_v.append(c)
-        
-        # elif(ie.ID == 3):               # DS Parameter Set
-        #     array_v.append(ie.ID)
-        #     #array_v.append(ie.len)
-        
-        # elif(ie.ID == 45):              # HT Capabilities
-        #     array_v.append(ie.ID)
-        #     array_v.append(ie.len)
-        #     for c in ie.info:
-        #         array_v.append(c)
-        
-        # elif(ie.ID == 127):             # Extended Capabilities
-        #     array_v.append(ie.ID)
-        #     #array_v.append(ie.len)
-        #     for i, c in enumerate(ie.info):
-        #         if(i != 0):
-        #             array_v.append(c)
-        #         else:
-        #             array_v.append(ord('0'))
-        
-        # elif(ie.ID == 191):             # VHT Capabilities
-        #     array_v.append(ie.ID)
-        #     array_v.append(ie.len)
-        #     for c in ie.info:
-        #         array_v.append(c)
-        
-        # elif(ie.ID == 70):              # RM Enabled Capabilities 
-        #     array_v.append(ie.ID)
-        #     array_v.append(ie.len)
-        #     for i, c in enumerate(ie.info):
-        #         if(i not in range(6)):
-        #             array_v.append(c)
-        #         else:
-        #             array_v.append(ord('0'))
-        
-        # elif(ie.ID == 107):             # Interworking
-        #     array_v.append(ie.ID)
-        #     array_v.append(ie.len)
-        #     for c in ie.info:
-        #         array_v.append(c)
-        
-        # elif(ie.ID == 59):              # Supported Operating Classes
-        #     array_v.append(ie.ID)
-        #     array_v.append(ie.len)
-        #     for c in ie.info:
-        #         array_v.append(c)
-        
-        # elif(ie.ID == 221):             # Vendor Specific
-        #     array_v.append(ie.ID)
-        #     array_v.append(ie.len)
-        #     for i, c in enumerate(ie.info):
-        #         if(i != 5):
-        #             array_v.append(c)
-        #         else:
-        #             array_v.append(ord('0'))
         
         ie = ie.payload
     
@@ -169,9 +107,6 @@ def replay_pcap_with_timing(pcap_file):
         return
 
     print(f"Loaded {len(packets)} packets from {pcap_file}")
-
-    # start_time = packets[0].time
-    # previous_time = start_time
 
     previous_time = 0.0
     

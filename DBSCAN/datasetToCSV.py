@@ -2,8 +2,8 @@ import os
 import pandas as pd
 from scapy.all import rdpcap, Dot11ProbeReq, Dot11Elt
 
-data_dir = './Data'
-output_csv = 'dataset_tabular.csv'
+data_dir = '../Data'
+output_csv = '/home/kali/Detection_Testing/DBSCAN/dataset_tabular.csv'
 
 allowed_ids = {
     1: 'IE_SupportedRates',
@@ -48,20 +48,18 @@ for file in pcap_files:
             # Handle Standard Allowed IDs
             if elt.ID in allowed_ids and elt.ID != 221:
                 col_name = allowed_ids[elt.ID]
-                # Unified Format: Hex string of the payload
                 row[col_name] = elt.info.hex()
 
             # Handle Vendor Specific (ID 221)
             elif elt.ID == 221:
-                if len(elt.info) >= 3:
-                    oui_str = ':'.join(f'{b:02x}' for b in elt.oui.to_bytes(3, 'big'))
-                    data_hex = elt.info.hex()
-                    col_name = f'IE_VendorSpecific_{oui_str}'
+                oui_str = ':'.join(f'{b:02x}' for b in elt.oui.to_bytes(3, 'big'))
+                data_hex = elt.info.hex()
+                col_name = f'IE_VendorSpecific_{oui_str}'
 
-                    if col_name in row:
-                        row[col_name] = row[col_name] + "+" + data_hex
-                    else:
-                        row[col_name] = data_hex
+                if col_name in row:
+                    row[col_name] = row[col_name] + "+" + data_hex
+                else:
+                    row[col_name] = data_hex
 
             elt = elt.payload
 

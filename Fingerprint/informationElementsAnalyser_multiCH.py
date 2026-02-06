@@ -69,12 +69,12 @@ except FileNotFoundError:
 # ---------------------------------------------------------------------------------------
 # 2. LOAD DATA FROM PCAP FILES (DEVICE CENTRIC)
 # ---------------------------------------------------------------------------------------
-print("Loading PCAP files from ./Data/ ...")
+print("Loading PCAP files from ../Data/ ...")
 
 # This list will act as our "Database"
 all_probe_requests = []
 
-pcap_files = glob.glob("./Data/*.pcap")
+pcap_files = glob.glob("../Data/*.pcap")
 
 for pcap_path in pcap_files:
     # Identify the device by its filename

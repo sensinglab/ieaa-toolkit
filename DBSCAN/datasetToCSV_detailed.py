@@ -2,8 +2,8 @@ import os
 import pandas as pd
 from scapy.all import rdpcap, Dot11ProbeReq, Dot11Elt
 
-data_dir = './Data'
-output_csv = 'dataset_tabular_detailed.csv'
+data_dir = '../Data'
+output_csv = '/home/kali/Detection_Testing/DBSCAN/dataset_tabular_detailed.csv'
 
 allowed_ids = {
     1: 'IE_SupportedRates',
