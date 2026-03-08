@@ -14,7 +14,7 @@ PACKET_POWER_FILTRATION = sc_cur.execute("Select Power_Filtration from SensorCon
 SLIDING_WINDOW = sc_cur.execute("""SELECT Sliding_Window FROM SensorConfiguration""").fetchone()[0]
 sc_con.close()
 
-output_csv = 'dataset.csv'
+output_csv = 'sniffedData.csv'
 
 allowed_ids = {
     1: 'IE_SupportedRates',

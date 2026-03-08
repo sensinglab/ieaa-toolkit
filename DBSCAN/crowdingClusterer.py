@@ -7,19 +7,16 @@ import sys
 sys.path.append('/home/kali/Desktop')
 from sensorFunctions import publish_mqtt_message
 
-# LOAD DATA
-input_csv = '/home/kali/Detection_Testing/DBSCAN/tester.csv'
+input_csv = '/home/kali/Detection_Testing/DBSCAN/sniffedData.csv'
+
 try:
     df = pd.read_csv(input_csv)
 
-    # DEDUPLICATION
     df_clean = df.drop_duplicates(keep='first').copy()
 
-    # SEPARATE IDENTIFIERS
     drop_for_ml = ['MAC']
     X_raw = df_clean.drop(columns=drop_for_ml, errors='ignore')
 
-    # PREPROCESSING PIPELINE
     categorical_cols = X_raw.select_dtypes(include=['object']).columns
     numeric_cols = X_raw.select_dtypes(include=['number']).columns
 
@@ -35,8 +32,7 @@ try:
 
     X_encoded = preprocessor.fit_transform(X_raw)
 
-    # DBSCAN CLUSTERING
-    dbscan = DBSCAN(eps=1.1, min_samples=1, metric='manhattan')
+    dbscan = DBSCAN(eps=2.1, min_samples=1, metric='manhattan')
 
     clusters = dbscan.fit_predict(X_encoded)
 
@@ -44,15 +40,12 @@ try:
 except pd.errors.EmptyDataError:
     n_clusters = 0
 
-# COMMUNICATION
-
 try:
     connwifi= sqlite3.connect('/home/kali/Desktop/DB/SensorConfiguration.db' , timeout=30)
     cwifi = connwifi.cursor()
 
     sensor_configuration = cwifi.execute("""SELECT * FROM SensorConfiguration""").fetchall()
 
-    #Sensor configuration
     if len(sensor_configuration) != 0:
         sensorUUID = sensor_configuration[0][0]
         sensorName = sensor_configuration[0][1]

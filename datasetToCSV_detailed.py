@@ -2,8 +2,8 @@ import os
 import pandas as pd
 from scapy.all import rdpcap, Dot11ProbeReq, Dot11Elt
 
-data_dir = '../Data'
-output_csv = '/home/kali/Detection_Testing/DBSCAN/dataset_tabular_detailed.csv'
+data_dir = './NN/Data70'
+output_csv = './NN/dataset_tabular_detailed_70.csv'
 
 allowed_ids = {
     1: 'IE_SupportedRates',
@@ -13,7 +13,7 @@ allowed_ids = {
     59: 'IE_SupportedOperatingClasses',
     70: 'IE_RMEnabledCapabilities',
     107: 'IE_Interworking',
-    # 127 is handled manually below
+    127: 'IE_ExtendedCapabilities',
     191: 'IE_VHTCapabilities',
     221: 'IE_VendorSpecific'
 }
