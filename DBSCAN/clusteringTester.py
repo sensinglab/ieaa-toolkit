@@ -81,10 +81,10 @@ def replay_pcap_with_timing(pcap_file):
         numeric_cols = df.select_dtypes(include=['number']).columns
         df[numeric_cols] = df[numeric_cols].fillna(-1)
 
-        df.to_csv("tester.csv", index=False)
+        df.to_csv("sniffedData.csv", index=False)
 
         subprocess.run(["sudo", "/usr/bin/python3", "/home/kali/Detection_Testing/DBSCAN/crowdingClusterer.py"])
 
     print("Finished replaying packets.")
 
-replay_pcap_with_timing("/home/kali/Detection_Testing/normal_dist.pcap")
+replay_pcap_with_timing("/home/kali/Detection_Testing/NN/normal_dist_30.pcap")

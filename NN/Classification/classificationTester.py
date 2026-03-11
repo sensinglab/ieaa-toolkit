@@ -83,9 +83,9 @@ def replay_pcap_with_timing(pcap_file):
 
         df.to_csv("sniffedData.csv", index=False)
 
-        subprocess.run(["sudo", "/usr/bin/python3", "/home/kali/Detection_Testing/NN/crowdingClassifier.py"])
+        subprocess.run(["sudo", "/usr/bin/python3", "/home/kali/Detection_Testing/NN/Classification/crowdingClassifier.py"])
 
     print("Finished replaying packets.")
 
-open('/home/kali/Detection_Testing/NN/classified_dist.csv', 'w').close()
+# open('/home/kali/Detection_Testing/NN/Classification/classified_dist.csv', 'w').close()
 replay_pcap_with_timing("/home/kali/Detection_Testing/NN/normal_dist_30.pcap")

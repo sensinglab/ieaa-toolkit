@@ -218,7 +218,7 @@ while(True):
     df.to_csv(output_csv, index=False)
 
     subprocess.Popen(
-        ["sudo", "/usr/bin/python3", "/home/kali/Detection_Testing/DBSCAN/crowdingClassifier.py"],
+        ["sudo", "/usr/bin/python3", "/home/kali/Detection_Testing/NN/Classification/crowdingClassifier.py"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )

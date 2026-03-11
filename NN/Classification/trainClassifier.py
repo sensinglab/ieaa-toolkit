@@ -8,10 +8,10 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report
 
-INPUT_CSV = 'labeled_dataset_70.csv'
+INPUT_CSV = '/home/kali/Detection_Testing/NN/labeled_dataset_70_detailed.csv'
 MODEL_FILENAME = 'wifi_device_classifier.pkl'
 
-# Columns to combine into the Target Label
+# # Columns to combine into the Target Label
 LABEL_COLS = ['Device vendor', 'Device model', 'Device OS', 'Device OS version']
 
 # Columns to DROP (Identifiers that would allow cheating)
@@ -21,7 +21,7 @@ print(f"Loading {INPUT_CSV}...")
 df = pd.read_csv(INPUT_CSV, sep=';')
 
 # Create the target variable
-# Combine Vendor + Model + OS + Version into one string like "Apple_iPhone13_iOS_15"
+# # Combine Vendor + Model + OS + Version into one string like "Apple_iPhone13_iOS_15"
 df['Target_Label'] = df[LABEL_COLS].astype(str).agg('_'.join, axis=1)
 
 # Separate features and target

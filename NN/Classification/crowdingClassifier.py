@@ -6,8 +6,8 @@ import sys
 sys.path.append('/home/kali/Desktop')
 from sensorFunctions import publish_mqtt_message
 
-INPUT_CSV = '/home/kali/Detection_Testing/NN/sniffedData.csv'
-CLASSIFIED_CSV = '/home/kali/Detection_Testing/NN/classified_dist.csv'
+INPUT_CSV = '/home/kali/Detection_Testing/NN/Classification/sniffedData.csv'
+CLASSIFIED_CSV = '/home/kali/Detection_Testing/NN/Classification/classified_dist.csv'
 
 model = joblib.load('wifi_device_classifier.pkl')
 n_devices = 0
@@ -47,28 +47,28 @@ except pd.errors.EmptyDataError:
     prediction = np.array([])
 
 # Testing
-try:
-    df_class = pd.read_csv(CLASSIFIED_CSV, sep=';')
-except pd.errors.EmptyDataError:
-    df_class = pd.DataFrame()
+# try:
+#     df_class = pd.read_csv(CLASSIFIED_CSV, sep=';')
+# except pd.errors.EmptyDataError:
+#     df_class = pd.DataFrame()
 
-new_len = len(np.unique(prediction.flatten()))
-current_len = len(df_class)
-max_len = max(current_len, new_len)
+# new_len = len(np.unique(prediction.flatten()))
+# current_len = len(df_class)
+# max_len = max(current_len, new_len)
 
-if new_len > current_len:
-    rows_to_add = new_len - current_len
-    top_pad = pd.DataFrame(np.nan, index=range(rows_to_add), columns=df_class.columns, dtype='object')
-    df_class = pd.concat([top_pad, df_class], axis=0)
-    df_class = df_class.reset_index(drop=True)
+# if new_len > current_len:
+#     rows_to_add = new_len - current_len
+#     top_pad = pd.DataFrame(np.nan, index=range(rows_to_add), columns=df_class.columns, dtype='object')
+#     df_class = pd.concat([top_pad, df_class], axis=0)
+#     df_class = df_class.reset_index(drop=True)
 
-new_series = pd.Series(np.nan, name=str(df_class.shape[1]*5 + 5), index=range(max_len), dtype='object')
-if new_len > 0:
-    new_series.iloc[-new_len:] = np.unique(prediction.flatten())
+# new_series = pd.Series(np.nan, name=str(df_class.shape[1]*5 + 5), index=range(max_len), dtype='object')
+# if new_len > 0:
+#     new_series.iloc[-new_len:] = np.unique(prediction.flatten())
 
-df_class = pd.concat([df_class, new_series], axis=1)
+# df_class = pd.concat([df_class, new_series], axis=1)
 
-df_class.to_csv(CLASSIFIED_CSV, index=False, sep=';')
+# df_class.to_csv(CLASSIFIED_CSV, index=False, sep=';')
 
 # Comunication
 try:
