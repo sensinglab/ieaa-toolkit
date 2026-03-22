@@ -1,18 +1,13 @@
-from scapy.all import Dot11Elt, PcapReader, PacketList
-import sqlite3
+from scapy.all import PcapReader, PacketList, Dot11Elt
+import subprocess
+import pandas as pd
 import sys
 sys.path.append('/home/kali/Desktop')
 from t1ha0 import ffi, lib
 
-dr_con = sqlite3.connect('/home/kali/Desktop/MemoryDB/DeviceRecords.db', timeout=30)
-dr_cur = dr_con.cursor()
+def frame_processing(pkt):
 
-dr_con.execute("PRAGMA journal_mode = WAL")
-dr_con.execute("PRAGMA cache_size = -64000")  # 64MB cache
-
-def frame_processing(frame):
-
-    ie = frame.getlayer(Dot11Elt)
+    ie = pkt.getlayer(Dot11Elt)
     array_v = []
 
     while ie:
@@ -36,9 +31,10 @@ def frame_processing(frame):
                 else:
                     array_v.append(ord('0'))
         ie = ie.payload
-    
-    footprint_mac = hex(lib.t1ha0(bytes(array_v), len(array_v), 3))[2:].upper()
-    return footprint_mac
+
+    fingerprint = hex(lib.t1ha0(bytes(array_v), len(array_v), 3))[2:]
+
+    return {'MAC': pkt.addr2, 'Fingerprint': fingerprint}
 
 def replay_pcap_with_timing(pcap_file):
     interval_buckets = {}
@@ -65,15 +61,21 @@ def replay_pcap_with_timing(pcap_file):
         interval_buckets[max_bucket - 1].extend(interval_buckets[max_bucket])
         interval_buckets[max_bucket] = []
 
+    n_pkts = [len(value) for _, value in sorted(interval_buckets.items())]
+    print(*n_pkts)
+
     for _, pkt_list in sorted(interval_buckets.items()):
-        fingerprints = []
+        rows = []
 
         for pkt in pkt_list:
-            fingerprints.append(frame_processing(pkt))
+            rows.append(frame_processing(pkt))
+        
+        df = pd.DataFrame(rows)
 
-        print(len(set(fingerprints)))
+        df.to_csv("sniffedData.csv", index=False)
+
+        subprocess.run(["sudo", "/usr/bin/python3", "/home/kali/Detection_Testing/NN/Regression/crowdingRegressor.py"])
 
     print("Finished replaying packets.")
 
-
-replay_pcap_with_timing("/home/kali/Detection_Testing/NN/dense_dist_30.pcap")
+replay_pcap_with_timing("/home/kali/Detection_Testing/NN/normal_dist_30.pcap")

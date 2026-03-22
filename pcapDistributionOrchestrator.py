@@ -8,7 +8,8 @@ parser = argparse.ArgumentParser(description="Merge PCAPs with arrival and durat
 parser.add_argument('--folder', default="/home/kali/Detection_Testing/DataCH1", help='Path to folder with PCAP files.')
 parser.add_argument('--output', required=True, help='Output merged PCAP file.')
 parser.add_argument('--total_time', type=int, required=True, help='Total duration of final capture in minutes.')
-parser.add_argument('--arrival_distribution', required=True, choices=['uniform', 'normal', 'poisson', 'bimodal', 'left_skewed'], help='Distribution for capture start times.')
+parser.add_argument('--arrival_distribution', required=True, choices=['static', 'uniform', 'normal', 'poisson', 'bimodal', 'left_skewed'], help='Distribution for capture start times.')
+parser.add_argument('--arrival_time', type=int, help='Arrival time for the static arrival distribution.')
 parser.add_argument('--duration_distribution', required=True, choices=['constant', 'uniform', 'normal'], help='Distribution for capture active duration.')
 parser.add_argument('--min_duration', type=int, default=1, help='Minimum active duration in minutes (default: 1).')
 parser.add_argument('--max_duration', type=int, default=20, help='Maximum active duration in minutes (default: 20).')
@@ -21,7 +22,7 @@ args = parser.parse_args()
 if args.pcaps:
     pcaps_list = args.pcaps.split(',')
 else:
-    pcaps_list = [f for f in os.listdir(args.folder) if f.endswith('.pcap')]
+    pcaps_list = [f for f in os.listdir(args.folder) if f.endswith('ch1.pcap')]
 if not pcaps_list:
     raise ValueError("No PCAP files found in the folder or specified.")
 
@@ -33,7 +34,9 @@ gap_sec = args.min_repetition_gap * 60
 placements = []  # List of (pcap_file, start_time_sec, duration_sec, end_time_sec)
 
 # Generate arrival times
-if args.arrival_distribution == 'uniform':
+if args.arrival_distribution == 'static':
+    arrival_times = [args.arrival_time * 60.0] * args.total_devices
+elif args.arrival_distribution == 'uniform':
     arrival_times = np.random.uniform(0, total_seconds, args.total_devices)
 elif args.arrival_distribution == 'normal':
     mean = total_seconds / 2

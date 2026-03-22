@@ -1,4 +1,4 @@
-from scapy.all import PcapReader, PacketList, Dot11ProbeReq, Dot11Elt
+from scapy.all import PcapReader, Dot11ProbeReq, Dot11Elt
 import subprocess
 import pandas as pd
 
@@ -59,13 +59,18 @@ def replay_pcap_with_timing(pcap_file):
                 max_bucket_index = bucket_index
 
             if bucket_index not in interval_buckets:
-                interval_buckets[bucket_index] = PacketList(name=f"Interval {bucket_index}")
+                interval_buckets[bucket_index] = []
             
             interval_buckets[bucket_index].append(pkt)
 
     for i in range(0, max_bucket_index + 1):
         if i not in interval_buckets:
-            interval_buckets[i] = PacketList(name=f"Interval {i} (Empty)")
+            interval_buckets[i] = []
+
+    max_bucket = max(interval_buckets.keys())
+    if all(abs(float(pkt.time) - max_bucket * 300.0) < 0.001 for pkt in interval_buckets[max_bucket]):
+        interval_buckets[max_bucket - 1].extend(interval_buckets[max_bucket])
+        interval_buckets[max_bucket] = []
 
     for _, pkt_list in sorted(interval_buckets.items()):
         rows = []
@@ -88,4 +93,4 @@ def replay_pcap_with_timing(pcap_file):
     print("Finished replaying packets.")
 
 # open('/home/kali/Detection_Testing/NN/Classification/classified_dist.csv', 'w').close()
-replay_pcap_with_timing("/home/kali/Detection_Testing/NN/normal_dist_30.pcap")
+replay_pcap_with_timing("/home/kali/Detection_Testing/NN/dense_dist_30.pcap")

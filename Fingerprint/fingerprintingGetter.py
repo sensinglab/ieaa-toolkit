@@ -1,5 +1,6 @@
-from scapy.all import *
+from scapy.all import Dot11Elt, rdpcap
 import os
+import sys
 import argparse
 sys.path.append('/home/kali/Desktop')
 from t1ha0 import ffi, lib
