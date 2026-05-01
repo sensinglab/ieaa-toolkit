@@ -32,11 +32,13 @@ try:
 
     X_encoded = preprocessor.fit_transform(X_raw)
 
-    dbscan = DBSCAN(eps=2.1, min_samples=1, metric='manhattan')
+    dbscan = DBSCAN(eps=2.1, min_samples=2, metric='manhattan')
 
     clusters = dbscan.fit_predict(X_encoded)
 
-    n_clusters = len(set(clusters)) - (1 if -1 in clusters else 0)
+    valid_clusters = len(set(clusters)) - (1 if -1 in clusters else 0)
+    noise_points = list(clusters).count(-1)
+    n_clusters = valid_clusters + noise_points
 except pd.errors.EmptyDataError:
     n_clusters = 0
 

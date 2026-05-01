@@ -243,4 +243,4 @@ def replay_pcap_with_timing(pcap_file):
 
     print("Finished replaying packets.")
 
-replay_pcap_with_timing("/home/kali/Detection_Testing/NN/dense_dist_30.pcap")
+replay_pcap_with_timing("/home/kali/Detection_Testing/Scenarios/skewed_dist_30.pcap")
