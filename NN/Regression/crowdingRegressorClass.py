@@ -7,43 +7,59 @@ sys.path.append('/home/kali/Desktop')
 from sensorFunctions import publish_mqtt_message
 
 INPUT_CSV = '/home/kali/Detection_Testing/NN/Regression/sniffedData.csv'
-MODEL_PATH = '/home/kali/Detection_Testing/NN/Regression/wifi_crowd_regressor.pkl'
+REGRESSOR_MODEL_PATH = '/home/kali/Detection_Testing/NN/Regression/wifi_crowd_regressor.pkl'
+CLASSIFIER_MODEL_PATH = '/home/kali/Detection_Testing/NN/Classification/wifi_device_classifier.pkl'
 
 n_devices = 0
 
 try:
-    model = joblib.load(MODEL_PATH)
+    regressor_model = joblib.load(REGRESSOR_MODEL_PATH)
+    classifier_model = joblib.load(CLASSIFIER_MODEL_PATH)
+    expected_cols = classifier_model.named_steps['preprocessor'].feature_names_in_
 except Exception as e:
-    print(f"Failed to load NN model: {e}")
+    print(f"Failed to load ML models: {e}")
     sys.exit(1)
 
-# Regression
 try:
     df_raw = pd.read_csv(INPUT_CSV)
     
     if not df_raw.empty:
         total_packets = len(df_raw)
         unique_macs = df_raw['MAC'].nunique()
-        unique_fingerprints = df_raw['Fingerprint'].nunique()
 
-        if unique_fingerprints == 0:
-            packets_per_fingerprint = 0
+        # 1. Classification
+        df_clean = df_raw.drop_duplicates(subset=[c for c in df_raw.columns if c != 'MAC'])
+        X_raw = df_clean.drop(columns=['MAC'], errors='ignore')
+
+        unique_classes = 0
+        if not X_raw.empty:
+            X_aligned = X_raw.reindex(columns=expected_cols)
+
+            for col in X_aligned.columns:
+                X_aligned[col] = X_aligned[col].fillna('MISSING').astype(str)
+
+            predictions = classifier_model.predict(X_aligned)
+            unique_classes = len(set(predictions))
+
+        # 2. Regression
+        if unique_classes == 0:
+            packets_per_class = 0
         else:
-            packets_per_fingerprint = total_packets / unique_fingerprints
+            packets_per_class = total_packets / unique_classes
 
         X_live = pd.DataFrame([{
             'Total_Packets': total_packets,
             'Unique_MACs': unique_macs,
-            'Unique_Fingerprints': unique_fingerprints,
-            'Packets_Per_Fingerprint': packets_per_fingerprint
+            'Unique_Classes': unique_classes,
+            'Packets_Per_Class': packets_per_class
         }])
 
-        raw_prediction = model.predict(X_live)[0]
-
+        raw_prediction = regressor_model.predict(X_live)[0]
         n_devices = max(0, int(np.round(raw_prediction)))
+        
+        # print(f"Live Prediction: {n_devices} Devices")
 
 except pd.errors.EmptyDataError:
-    # print("CSV is empty. Assuming 0 devices.")
     n_devices = 0
 except Exception as e:
     print(f"Error during ML prediction: {e}")

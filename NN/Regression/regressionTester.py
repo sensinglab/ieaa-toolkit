@@ -1,4 +1,4 @@
-from scapy.all import PcapReader, PacketList, Dot11Elt
+from scapy.all import PcapReader, Dot11Elt
 import subprocess
 import pandas as pd
 import sys
@@ -11,30 +11,59 @@ def frame_processing(pkt):
     array_v = []
 
     while ie:
-        if ie.ID in [1, 50, 127, 191, 70, 107, 59]:
+        if ie.ID in [1, 50, 107, 191]:
             array_v.extend([ie.ID, ie.len])
             array_v.extend(ie.info)
-        elif ie.ID == 3:
-            array_v.append(ie.ID)
         elif ie.ID == 45:
             array_v.extend([ie.ID, ie.len])
             for i, c in enumerate(ie.info):
-                if i != 4:
-                    array_v.append(c)
+                if i == 1:
+                    array_v.append(c & 0xBF)
                 else:
-                    array_v.append(ord('0'))
-        elif ie.ID == 221:
+                    array_v.append(c)
+        elif ie.ID == 127:
             array_v.extend([ie.ID, ie.len])
             for i, c in enumerate(ie.info):
-                if i != 5 and i != 7:
-                    array_v.append(c)
+                if i == 3:
+                    array_v.append(c & 0xFB)
                 else:
-                    array_v.append(ord('0'))
+                    array_v.append(c)
+        elif ie.ID == 221:
+            array_v.extend([ie.ID, ie.len])
+            is_microsoft = False
+            is_epigram = False
+
+            if len(ie.info) >= 3:
+                if ie.info[0] == 0x00 and ie.info[1] == 0x50 and ie.info[2] == 0xF2:
+                    is_microsoft = True
+                elif ie.info[0] == 0x00 and ie.info[1] == 0x90 and ie.info[2] == 0x4C:
+                    is_epigram = True
+            
+            for i, c in enumerate(ie.info):
+                if is_microsoft and i == 5:
+                    array_v.append(c & 0xFE)
+                elif is_epigram and i == 8:
+                    array_v.append(c & 0x9F)
+                elif is_epigram and i == 9:
+                    array_v.append(c & 0xEF)
+                else:
+                    array_v.append(c)
+                    
         ie = ie.payload
 
     fingerprint = hex(lib.t1ha0(bytes(array_v), len(array_v), 3))[2:]
 
-    return {'MAC': pkt.addr2, 'Fingerprint': fingerprint}
+    try:
+        seq = pkt.SC >> 4
+    except:
+        seq = 0
+
+    return {
+        'MAC': pkt.addr2, 
+        'Time': float(pkt.time), 
+        'Seq': seq, 
+        'Fingerprint': fingerprint
+    }
 
 def replay_pcap_with_timing(pcap_file):
     interval_buckets = {}
@@ -61,8 +90,8 @@ def replay_pcap_with_timing(pcap_file):
         interval_buckets[max_bucket - 1].extend(interval_buckets[max_bucket])
         interval_buckets[max_bucket] = []
 
-    n_pkts = [len(value) for _, value in sorted(interval_buckets.items())]
-    print(*n_pkts)
+    # n_pkts = [len(value) for _, value in sorted(interval_buckets.items())]
+    # print(*n_pkts)
 
     for _, pkt_list in sorted(interval_buckets.items()):
         rows = []
@@ -74,8 +103,8 @@ def replay_pcap_with_timing(pcap_file):
 
         df.to_csv("sniffedData.csv", index=False)
 
-        subprocess.run(["sudo", "/usr/bin/python3", "/home/kali/Detection_Testing/NN/Regression/crowdingRegressor.py"])
+        subprocess.run(["sudo", "/usr/bin/python3", "/home/kali/Detection_Testing/NN/Regression/crowdingRegressorRatios.py"])
 
     print("Finished replaying packets.")
 
-replay_pcap_with_timing("/home/kali/Detection_Testing/NN/normal_dist_30.pcap")
+replay_pcap_with_timing("/home/kali/Detection_Testing/Scenarios/normal_dist_30.pcap")

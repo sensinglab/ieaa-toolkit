@@ -1,15 +1,28 @@
 import os
 import sys
 import pandas as pd
+import joblib
 import concurrent.futures
 from scapy.all import PcapReader, Dot11ProbeReq, Dot11Elt
-sys.path.append('/home/kali/Desktop')
-from t1ha0 import ffi, lib
 
 DISTRIBUTIONS_DIR = './Distributions'
-OUTPUT_DATASET = 'regression_dataset_fing3.csv'
-OUTPUT_REPORT = 'regression_dataset_fing3_report.txt'
+OUTPUT_DATASET = 'regression_dataset_class.csv'
+OUTPUT_REPORT = 'regression_dataset_class_report.txt'
+CLASSIFIER_MODEL_PATH = '/home/kali/Detection_Testing/NN/Classification/wifi_device_classifier.pkl'
 INTERVAL_SEC = 300
+
+allowed_ids = {
+    1: 'IE_SupportedRates',
+    3: 'IE_DSSSParameterSet',
+    45: 'IE_HTCapabilities',
+    50: 'IE_ExtendedSupportedRates',
+    59: 'IE_SupportedOperatingClasses',
+    70: 'IE_RMEnabledCapabilities',
+    107: 'IE_Interworking',
+    127: 'IE_ExtendedCapabilities',
+    191: 'IE_VHTCapabilities',
+    221: 'IE_VendorSpecific'
+}
 
 MAX_CORES = os.cpu_count() or 4
 
@@ -18,7 +31,7 @@ INPUT_SCENARIOS = []
 for file in os.listdir(DISTRIBUTIONS_DIR):
     if file.endswith('.pcap'):
         base_name = file[:-5]
-        
+
         pcap_path = os.path.join(DISTRIBUTIONS_DIR, file)
         csv_path = os.path.join(DISTRIBUTIONS_DIR, f"{base_name}_5min_intervals.csv")
 
@@ -36,55 +49,26 @@ if not INPUT_SCENARIOS:
     print("Exiting: No valid PCAP/CSV pairs found.")
     sys.exit(0)
 
-def fingerprint_getter(frame):
-
-    ie = frame.getlayer(Dot11Elt)
-    array_v = []
-
-    while ie:
-        if ie.ID in [1, 50, 107, 191]:
-            array_v.extend([ie.ID, ie.len])
-            array_v.extend(ie.info)
-        elif ie.ID == 45:
-            array_v.extend([ie.ID, ie.len])
-            for i, c in enumerate(ie.info):
-                if i == 1:
-                    array_v.append(c & 0xBF)
-                else:
-                    array_v.append(c)
-        elif ie.ID == 127:
-            array_v.extend([ie.ID, ie.len])
-            for i, c in enumerate(ie.info):
-                if i == 3:
-                    array_v.append(c & 0xFB)
-                else:
-                    array_v.append(c)
-        elif ie.ID == 221:
-            array_v.extend([ie.ID, ie.len])
-            is_microsoft = False
-            is_epigram = False
-
-            if len(ie.info) >= 3:
-                if ie.info[0] == 0x00 and ie.info[1] == 0x50 and ie.info[2] == 0xF2:
-                    is_microsoft = True
-                elif ie.info[0] == 0x00 and ie.info[1] == 0x90 and ie.info[2] == 0x4C:
-                    is_epigram = True
-            
-            for i, c in enumerate(ie.info):
-                if is_microsoft and i == 5:
-                    array_v.append(c & 0xFE)
-                elif is_epigram and i == 8:
-                    array_v.append(c & 0x9F)
-                elif is_epigram and i == 9:
-                    array_v.append(c & 0xEF)
-                else:
-                    array_v.append(c)
-                    
-        ie = ie.payload
+def parse_packet_to_dict(pkt):
+    row = {'MAC': pkt.addr2}
+    ie = pkt.getlayer(Dot11Elt)
     
-    return hex(lib.t1ha0(bytes(array_v), len(array_v), 3))[2:]
+    while ie:
+        if ie.ID in [1, 3, 45, 50, 59, 70, 107, 191]:
+            col_name = allowed_ids[ie.ID]
+            row[col_name] = ie.info.hex()
+        elif ie.ID == 221:
+            if len(ie.info) >= 3:
+                oui = ie.info[:3].hex()
+                col_name = f'IE_Vendor_{oui}'
+                row[col_name] = row.get(col_name, "") + ie.info[3:].hex()
+        ie = ie.payload
+    return row
 
 def process_single_scenario(scenario):
+    classifier_model = joblib.load(CLASSIFIER_MODEL_PATH)
+    expected_cols = classifier_model.named_steps['preprocessor'].feature_names_in_
+
     pcap_path = scenario['pcap']
     csv_path = scenario['csv']
     scenario_name = os.path.basename(pcap_path)
@@ -93,40 +77,51 @@ def process_single_scenario(scenario):
     intervals = {}
 
     try:
-        # Read Ground Truth
         df_truth = pd.read_csv(csv_path, sep=';', header=None)
         true_counts = (df_truth.notna() & (df_truth != '')).sum(axis=0).to_dict()
 
-        # Read Packets
         with PcapReader(pcap_path) as pcap_reader:
             for pkt in pcap_reader:
-                if not pkt.haslayer(Dot11ProbeReq):
+                if not pkt.haslayer(Dot11ProbeReq): 
                     continue
-
-                interval_idx = int(pkt.time // INTERVAL_SEC)
                 
+                mac = pkt.addr2
+                time_val = float(pkt.time)
+
+                interval_idx = int(time_val // INTERVAL_SEC)
                 if interval_idx not in intervals:
-                    intervals[interval_idx] = {
-                        'macs': set(),
-                        'fingerprints': set(),
-                        'packet_count': 0
-                    }
+                    intervals[interval_idx] = {'packets': [], 'macs': set()}
 
-                intervals[interval_idx]['packet_count'] += 1
-                intervals[interval_idx]['macs'].add(pkt.addr2)
-                intervals[interval_idx]['fingerprints'].add(fingerprint_getter(pkt))
+                intervals[interval_idx]['packets'].append(parse_packet_to_dict(pkt))
+                intervals[interval_idx]['macs'].add(mac)
 
-        # Compile Features
         for idx, data in intervals.items():
-            true_device_count = true_counts.get(idx, 0)
+            df_interval = pd.DataFrame(data['packets'])
+            total_packets = len(df_interval)
             
+            df_clean = df_interval.drop_duplicates(subset=[c for c in df_interval.columns if c != 'MAC'])
+            X_raw = df_clean.drop(columns=['MAC'], errors='ignore')
+
+            unique_classes = 0
+            if not X_raw.empty:
+                X_aligned = X_raw.reindex(columns=expected_cols)
+
+                for col in X_aligned.columns:
+                    if any(num_pattern in col for num_pattern in ["IE_HTCapabilities_", "IE_ExtCap_", "Sequence_Number"]):
+                        X_aligned[col] = pd.to_numeric(X_aligned[col]).fillna(-1)
+                    else:
+                        X_aligned[col] = X_aligned[col].fillna('MISSING').astype(str)
+
+                predictions = classifier_model.predict(X_aligned)
+                unique_classes = len(set(predictions))
+
             row = {
                 'Interval_ID': idx,
-                'Total_Packets': data['packet_count'],
+                'Total_Packets': total_packets,
                 'Unique_MACs': len(data['macs']),
-                'Unique_Fingerprints': len(data['fingerprints']),
-                'Packets_Per_Fingerprint': data['packet_count'] / max(1, len(data['fingerprints'])),
-                'Target_Device_Count': true_device_count
+                'Unique_Classes': unique_classes,
+                'Packets_Per_Class': total_packets / max(1, unique_classes),
+                'Target_Device_Count': true_counts.get(idx, 0)
             }
             extracted_rows.append(row)
             
@@ -139,13 +134,10 @@ all_extracted_rows = []
 
 print(f"\nStarting Multiprocessing with {MAX_CORES} CPU Cores...")
 
-# Create a pool of workers
 with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_CORES) as executor:
-    # Submit all scenarios to the workers
     future_to_scenario = {executor.submit(process_single_scenario, scenario): scenario for scenario in INPUT_SCENARIOS}
     
     completed_count = 0
-    # Process results exactly as they finish
     for future in concurrent.futures.as_completed(future_to_scenario):
         completed_count += 1
         try:

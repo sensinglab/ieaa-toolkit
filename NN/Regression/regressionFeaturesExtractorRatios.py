@@ -2,13 +2,13 @@ import os
 import sys
 import pandas as pd
 import concurrent.futures
-from scapy.all import PcapReader, Dot11ProbeReq, Dot11Elt
+from scapy.all import PcapReader, Dot11, Dot11ProbeReq, Dot11Elt
 sys.path.append('/home/kali/Desktop')
 from t1ha0 import ffi, lib
 
 DISTRIBUTIONS_DIR = './Distributions'
-OUTPUT_DATASET = 'regression_dataset_fing3.csv'
-OUTPUT_REPORT = 'regression_dataset_fing3_report.txt'
+OUTPUT_DATASET = 'regression_dataset_ratios.csv'
+OUTPUT_REPORT = 'regression_dataset_report_ratios.txt'
 INTERVAL_SEC = 300
 
 MAX_CORES = os.cpu_count() or 4
@@ -37,52 +37,33 @@ if not INPUT_SCENARIOS:
     sys.exit(0)
 
 def fingerprint_getter(frame):
-
     ie = frame.getlayer(Dot11Elt)
     array_v = []
 
     while ie:
-        if ie.ID in [1, 50, 107, 191]:
+        if ie.ID in [1, 50, 127, 191, 70, 107, 59]:
             array_v.extend([ie.ID, ie.len])
             array_v.extend(ie.info)
+        elif ie.ID == 3:
+            array_v.append(ie.ID)
         elif ie.ID == 45:
             array_v.extend([ie.ID, ie.len])
             for i, c in enumerate(ie.info):
-                if i == 1:
-                    array_v.append(c & 0xBF)
-                else:
+                if i != 4:
                     array_v.append(c)
-        elif ie.ID == 127:
-            array_v.extend([ie.ID, ie.len])
-            for i, c in enumerate(ie.info):
-                if i == 3:
-                    array_v.append(c & 0xFB)
                 else:
-                    array_v.append(c)
+                    array_v.append(ord('0'))
         elif ie.ID == 221:
             array_v.extend([ie.ID, ie.len])
-            is_microsoft = False
-            is_epigram = False
-
-            if len(ie.info) >= 3:
-                if ie.info[0] == 0x00 and ie.info[1] == 0x50 and ie.info[2] == 0xF2:
-                    is_microsoft = True
-                elif ie.info[0] == 0x00 and ie.info[1] == 0x90 and ie.info[2] == 0x4C:
-                    is_epigram = True
-            
             for i, c in enumerate(ie.info):
-                if is_microsoft and i == 5:
-                    array_v.append(c & 0xFE)
-                elif is_epigram and i == 8:
-                    array_v.append(c & 0x9F)
-                elif is_epigram and i == 9:
-                    array_v.append(c & 0xEF)
-                else:
+                if i != 5 and i != 7:
                     array_v.append(c)
-                    
+                else:
+                    array_v.append(ord('0'))
         ie = ie.payload
     
     return hex(lib.t1ha0(bytes(array_v), len(array_v), 3))[2:]
+
 
 def process_single_scenario(scenario):
     pcap_path = scenario['pcap']
@@ -91,41 +72,69 @@ def process_single_scenario(scenario):
     
     extracted_rows = []
     intervals = {}
+    last_seen_macs = {}
 
     try:
-        # Read Ground Truth
         df_truth = pd.read_csv(csv_path, sep=';', header=None)
         true_counts = (df_truth.notna() & (df_truth != '')).sum(axis=0).to_dict()
 
-        # Read Packets
         with PcapReader(pcap_path) as pcap_reader:
             for pkt in pcap_reader:
                 if not pkt.haslayer(Dot11ProbeReq):
                     continue
 
-                interval_idx = int(pkt.time // INTERVAL_SEC)
+                mac = pkt.addr2
+                time_val = float(pkt.time)
+                
+                try:
+                    seq = pkt[Dot11].SC >> 4
+                except:
+                    seq = 0
+
+                is_new_burst = True
+                
+                if mac in last_seen_macs:
+                    last_pkt = last_seen_macs[mac]
+                    time_diff = time_val - last_pkt['time']
+                    seq_diff = (seq - last_pkt['seq']) % 4096 
+                    
+                    if time_diff <= 3.0 and seq_diff <= 15:
+                        is_new_burst = False
+
+                last_seen_macs[mac] = {'time': time_val, 'seq': seq}
+
+                interval_idx = int(time_val // INTERVAL_SEC)
                 
                 if interval_idx not in intervals:
                     intervals[interval_idx] = {
                         'macs': set(),
                         'fingerprints': set(),
-                        'packet_count': 0
+                        'packet_count': 0,
+                        'burst_count': 0
                     }
 
                 intervals[interval_idx]['packet_count'] += 1
-                intervals[interval_idx]['macs'].add(pkt.addr2)
+                intervals[interval_idx]['macs'].add(mac)
                 intervals[interval_idx]['fingerprints'].add(fingerprint_getter(pkt))
+                
+                if is_new_burst:
+                    intervals[interval_idx]['burst_count'] += 1
 
-        # Compile Features
         for idx, data in intervals.items():
             true_device_count = true_counts.get(idx, 0)
             
             row = {
                 'Interval_ID': idx,
                 'Total_Packets': data['packet_count'],
+                'Total_Bursts': data['burst_count'],
                 'Unique_MACs': len(data['macs']),
                 'Unique_Fingerprints': len(data['fingerprints']),
+                'Packets_Per_Burst': data['packet_count'] / data['burst_count'],
+                'Packets_Per_MAC': data['packet_count'] / max(1, len(data['macs'])),
                 'Packets_Per_Fingerprint': data['packet_count'] / max(1, len(data['fingerprints'])),
+                'Bursts_Per_MAC': data['burst_count'] / max(1, len(data['macs'])),
+                'Bursts_Per_Fingerprint': data['burst_count'] / max(1, len(data['fingerprints'])),
+                'MACs_Per_Fingerprint': len(data['macs']) / max(1, len(data['fingerprints'])),
                 'Target_Device_Count': true_device_count
             }
             extracted_rows.append(row)
@@ -139,13 +148,10 @@ all_extracted_rows = []
 
 print(f"\nStarting Multiprocessing with {MAX_CORES} CPU Cores...")
 
-# Create a pool of workers
 with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_CORES) as executor:
-    # Submit all scenarios to the workers
     future_to_scenario = {executor.submit(process_single_scenario, scenario): scenario for scenario in INPUT_SCENARIOS}
     
     completed_count = 0
-    # Process results exactly as they finish
     for future in concurrent.futures.as_completed(future_to_scenario):
         completed_count += 1
         try:
