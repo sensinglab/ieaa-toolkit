@@ -2,7 +2,8 @@ import pandas as pd
 import joblib
 from sklearn.ensemble import RandomForestRegressor
 
-INPUT_DATASET = '/home/kali/Detection_Testing/NN/Regression/regression_dataset.csv'
+# INPUT_DATASET = '/home/kali/Detection_Testing/NN/Regression/regression_dataset_fing_20-20_300.csv'
+INPUT_DATASET = '/home/kali/Detection_Testing/NN/Regression/regression_dataset_fing_20-20_burst_300.csv'
 # INPUT_DATASET = '/home/kali/Detection_Testing/NN/Regression/regression_dataset_dbscan.csv'
 # INPUT_DATASET = '/home/kali/Detection_Testing/NN/Regression/regression_dataset_class.csv'
 # INPUT_DATASET = '/home/kali/Detection_Testing/NN/Regression/regression_dataset_class_burst.csv'
@@ -11,7 +12,8 @@ MODEL_FILENAME = 'wifi_crowd_rf_regressor.pkl'
 print(f"Loading {INPUT_DATASET}...")
 df = pd.read_csv(INPUT_DATASET)
 
-X = df[['Total_Packets', 'Unique_MACs', 'Unique_Fingerprints', 'Packets_Per_Fingerprint']]
+# X = df[['Total_Packets', 'Unique_MACs', 'Unique_Fingerprints', 'Packets_Per_Fingerprint']]
+X = df[['Total_Packets', 'Total_Bursts', 'Unique_MACs', 'Unique_Fingerprints', 'Packets_Per_Fingerprint', 'Bursts_Per_Fingerprint']]
 # X = df[['Total_Packets', 'Unique_MACs', 'Unique_Clusters', 'Packets_Per_Cluster']]
 # X = df[['Total_Packets', 'Unique_MACs', 'Unique_Classes', 'Packets_Per_Class']]
 # X = df[['Total_Packets', 'Total_Bursts', 'Unique_MACs', 'Unique_Classes', 'Packets_Per_Class', 'Bursts_Per_Class']]
