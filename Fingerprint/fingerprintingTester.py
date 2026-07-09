@@ -16,25 +16,33 @@ def frame_processing(frame):
     array_v = []
 
     while ie:
-        if ie.ID in [1, 50, 127, 191, 70, 107, 59]:
+        # 100% Stable standard IEs (No masking required)
+        if ie.ID in [1, 45, 50, 59, 70, 107, 127, 191]:
             array_v.extend([ie.ID, ie.len])
             array_v.extend(ie.info)
-        elif ie.ID == 3:
-            array_v.append(ie.ID)
-        elif ie.ID == 45:
-            array_v.extend([ie.ID, ie.len])
-            for i, c in enumerate(ie.info):
-                if i != 4:
-                    array_v.append(c)
-                else:
-                    array_v.append(ord('0'))
+
+        # Vendor Specific (221)
         elif ie.ID == 221:
             array_v.extend([ie.ID, ie.len])
+            
+            is_epigram = False
+
+            if len(ie.info) >= 3:
+                if ie.info[0] == 0x00 and ie.info[1] == 0x90 and ie.info[2] == 0x4C:
+                    is_epigram = True
+            
             for i, c in enumerate(ie.info):
-                if i != 5 and i != 7:
-                    array_v.append(c)
+                # Epigram (00:90:4C) - Mask Index 8: 2nd, 3rd bits (0x60) -> Inverse: 0x9F
+                if is_epigram and i == 8:
+                    array_v.append(c & 0x9F)
+                    
+                # Epigram (00:90:4C) - Mask Index 9: 4th bit (0x10) -> Inverse: 0xEF
+                elif is_epigram and i == 9:
+                    array_v.append(c & 0xEF)
+                
                 else:
-                    array_v.append(ord('0'))
+                    array_v.append(c)
+                    
         ie = ie.payload
     
     footprint_mac = hex(lib.t1ha0(bytes(array_v), len(array_v), 3))[2:].upper()
@@ -76,4 +84,4 @@ def replay_pcap_with_timing(pcap_file):
     print("Finished replaying packets.")
 
 
-replay_pcap_with_timing("/home/kali/Detection_Testing/NN/dense_dist_30.pcap")
+replay_pcap_with_timing("/home/kali/Detection_Testing/Scenarios/300_uniform_dist_30.pcap")
