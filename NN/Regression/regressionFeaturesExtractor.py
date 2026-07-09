@@ -7,8 +7,8 @@ sys.path.append('/home/kali/Desktop')
 from t1ha0 import ffi, lib
 
 DISTRIBUTIONS_DIR = './Distributions'
-OUTPUT_DATASET = 'regression_dataset_fing3.csv'
-OUTPUT_REPORT = 'regression_dataset_fing3_report.txt'
+OUTPUT_DATASET = 'regression_dataset_fing_20|20_300.csv'
+OUTPUT_REPORT = 'regression_dataset_fing_20|20_300_report.txt'
 INTERVAL_SEC = 300
 
 MAX_CORES = os.cpu_count() or 4
@@ -42,41 +42,30 @@ def fingerprint_getter(frame):
     array_v = []
 
     while ie:
-        if ie.ID in [1, 50, 107, 191]:
+        # 100% Stable standard IEs (No masking required)
+        if ie.ID in [1, 45, 50, 59, 70, 107, 127, 191]:
             array_v.extend([ie.ID, ie.len])
             array_v.extend(ie.info)
-        elif ie.ID == 45:
-            array_v.extend([ie.ID, ie.len])
-            for i, c in enumerate(ie.info):
-                if i == 1:
-                    array_v.append(c & 0xBF)
-                else:
-                    array_v.append(c)
-        elif ie.ID == 127:
-            array_v.extend([ie.ID, ie.len])
-            for i, c in enumerate(ie.info):
-                if i == 3:
-                    array_v.append(c & 0xFB)
-                else:
-                    array_v.append(c)
+
+        # Vendor Specific (221)
         elif ie.ID == 221:
             array_v.extend([ie.ID, ie.len])
-            is_microsoft = False
+            
             is_epigram = False
 
             if len(ie.info) >= 3:
-                if ie.info[0] == 0x00 and ie.info[1] == 0x50 and ie.info[2] == 0xF2:
-                    is_microsoft = True
-                elif ie.info[0] == 0x00 and ie.info[1] == 0x90 and ie.info[2] == 0x4C:
+                if ie.info[0] == 0x00 and ie.info[1] == 0x90 and ie.info[2] == 0x4C:
                     is_epigram = True
             
             for i, c in enumerate(ie.info):
-                if is_microsoft and i == 5:
-                    array_v.append(c & 0xFE)
-                elif is_epigram and i == 8:
+                # Epigram (00:90:4C) - Mask Index 8: 2nd, 3rd bits (0x60) -> Inverse: 0x9F
+                if is_epigram and i == 8:
                     array_v.append(c & 0x9F)
+                    
+                # Epigram (00:90:4C) - Mask Index 9: 4th bit (0x10) -> Inverse: 0xEF
                 elif is_epigram and i == 9:
                     array_v.append(c & 0xEF)
+                
                 else:
                     array_v.append(c)
                     

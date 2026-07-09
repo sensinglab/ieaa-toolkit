@@ -70,32 +70,4 @@ except Exception as e:
     print(f"Error during ML prediction: {e}")
     n_devices = 0
 
-# Comunication
-try:
-    connwifi= sqlite3.connect('/home/kali/Desktop/DB/SensorConfiguration.db' , timeout=30)
-    cwifi = connwifi.cursor()
-
-    sensor_configuration = cwifi.execute("""SELECT * FROM SensorConfiguration""").fetchall()
-
-    #Sensor configuration
-    if len(sensor_configuration) != 0:
-        sensorUUID = sensor_configuration[0][0]
-        sensorName = sensor_configuration[0][1]
-        influxdb_bucket = sensor_configuration[0][8]
-        uploadTechnology = sensor_configuration[0][12]
-
-        if uploadTechnology.lower() == "wifi":
-            ip_address = cwifi.execute("""SELECT IP_Address FROM SensorCommunication""").fetchone()[0]
-
-
-    else:
-        print("Sensor is not currently configured. It is required a cloud IP address to connect to the cloud server via MQTT.\nPlease run the 'sensorConfiguration.py' script to configure the sensor.")
-        exit(0)
-
-except sqlite3.Error as error:
-    print("Failed to read sensor configuration from local database.")
-    exit(0)
-
-# Upload via Wi-Fi
-if uploadTechnology.lower() == "wifi":
-    publish_mqtt_message(n_devices, f"sttoolkit/mqtt/wifi/numdetections/{influxdb_bucket}/{ip_address}/{sensorName}/{sensorUUID}")
+print(n_devices)
